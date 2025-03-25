@@ -10,54 +10,91 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3000;
 
-app.use(cors());
+// Enhanced CORS configuration
+app.use(cors({
+  origin: [
+    "https://lucillezhu13.github.io/UROP_Chatbot/", // Your GitHub Pages
+    "http://localhost:3000"           // For local testing
+  ],
+  methods: ["POST"],
+  credentials: true
+}));
+
 app.use(bodyParser.json());
 
-const openai = new OpenAI({
-  baseURL: "https://api.deepseek.com",
-  apiKey: "sk-d3ae19dbe4fa462393b860637f1a19d2",
-});
+// Initialize OpenAI with error handling
+let openai;
+try {
+  openai = new OpenAI({
+    baseURL: "https://api.deepseek.com",
+    apiKey: process.env.OPENAI_API_KEY || "sk-d3ae19dbe4fa462393b860637f1a19d2", // Never hardcode in production
+  });
+} catch (err) {
+  console.error("OpenAI initialization failed:", err);
+  process.exit(1);
+}
 
-// Read prompt from file
+// Improved file reading with caching
+let cachedPrompt = null;
 const getSystemPrompt = () => {
+  if (cachedPrompt) return cachedPrompt;
+  
   try {
-    const promptText = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf8');
-    // Optionally process the prompt (e.g., insert current date)
-    return promptText.replace('${new Date().toLocaleDateString()}', new Date().toLocaleDateString());
+    const promptPath = path.join(__dirname, 'prompt.txt');
+    if (!fs.existsSync(promptPath)) {
+      throw new Error("prompt.txt not found");
+    }
+    cachedPrompt = fs.readFileSync(promptPath, 'utf8')
+      .replace('${new Date().toLocaleDateString()}', new Date().toLocaleDateString());
+    return cachedPrompt;
   } catch (err) {
-    console.error("Error reading prompt file:", err);
-    return "You are a helpful assistant."; // Fallback prompt
+    console.error("Error reading prompt:", err);
+    return "You are a helpful assistant.";
   }
 };
 
+// Enhanced API endpoint
 app.post("/chat", async (req, res) => {
-  const { history } = req.body;
-
   try {
+    const { history } = req.body;
+    
+    if (!Array.isArray(history)) {
+      return res.status(400).json({ error: "History must be an array" });
+    }
+
     const messages = [
       { role: "system", content: getSystemPrompt() },
-      ...history
+      ...history.filter(msg => 
+        msg.role && ["system", "user", "assistant"].includes(msg.role) && msg.content
+      )
     ];
 
     const completion = await openai.chat.completions.create({
       model: "deepseek-chat",
       messages: messages,
+      max_tokens: 1000,
+      temperature: 0.7,
     });
 
     res.json({ 
       reply: completion.choices[0].message.content 
     });
   } catch (error) {
-    console.error("Error:", error);
+    console.error("API Error:", error);
     res.status(500).json({ 
-      error: "Failed to get response. Please try again." 
+      error: error.message || "Failed to process request" 
     });
   }
 });
 
+// Health check endpoint
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
 
-app.listen(process.env.PORT || 3000, () => {
-  console.log(`Server running on port ${process.env.PORT || 3000}`);
+// Start server
+app.listen(port, () => {
+  console.log(`Server running on port ${port}`);
 });
