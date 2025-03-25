@@ -5,6 +5,9 @@ import OpenAI from "openai";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import dotenv from "dotenv";
+
+dotenv.config(); // Load environment variables
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,17 +15,19 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Enhanced CORS configuration
+// Allowed frontend origins
+const allowedOrigins = [
+  "https://lucillezhu13.github.io",
+  "http://localhost:5173", // Add for local development if needed
+];
+
+// CORS configuration
 app.use(cors({
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = `CORS policy blocks access from ${origin}`;
-      return callback(new Error(msg), false);
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
     }
-    return callback(null, true);
+    return callback(new Error(`CORS policy blocks access from ${origin}`), false);
   },
   methods: ["GET", "POST"],
   credentials: true
@@ -30,13 +35,17 @@ app.use(cors({
 
 app.use(bodyParser.json());
 
-// Initialize OpenAI with error handling
+// Initialize OpenAI securely
 let openai;
 try {
   openai = new OpenAI({
     baseURL: "https://api.deepseek.com",
-    apiKey: process.env.OPENAI_API_KEY || "sk-d3ae19dbe4fa462393b860637f1a19d2", // Never hardcode in production
+    apiKey: process.env.OPENAI_API_KEY, // Use environment variable
   });
+
+  if (!process.env.OPENAI_API_KEY) {
+    console.warn("Warning: OPENAI_API_KEY is missing!");
+  }
 } catch (err) {
   console.error("OpenAI initialization failed:", err);
   process.exit(1);
@@ -61,11 +70,11 @@ const getSystemPrompt = () => {
   }
 };
 
-// Enhanced API endpoint
+// API endpoint for chat
 app.post("/chat", async (req, res) => {
   try {
     const { history } = req.body;
-    
+
     if (!Array.isArray(history)) {
       return res.status(400).json({ error: "History must be an array" });
     }
