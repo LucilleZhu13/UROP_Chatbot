@@ -14,11 +14,17 @@ const port = process.env.PORT || 3000;
 
 // Enhanced CORS configuration
 app.use(cors({
-  origin: [
-    "https://lucillezhu13.github.io/UROP_Chatbot/", // Your GitHub Pages
-    "http://localhost:3000"           // For local testing
-  ],
-  methods: ["POST"],
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps or curl requests)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) === -1) {
+      const msg = `CORS policy blocks access from ${origin}`;
+      return callback(new Error(msg), false);
+    }
+    return callback(null, true);
+  },
+  methods: ["GET", "POST"],
   credentials: true
 }));
 
