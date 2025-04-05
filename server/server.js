@@ -69,7 +69,7 @@ const getSystemPrompt = () => {
   }
 };
 
-// API endpoint for chat
+// API endpoint for chat (with streaming)
 app.post("/chat", async (req, res) => {
   try {
     const { history } = req.body;
@@ -90,16 +90,36 @@ app.post("/chat", async (req, res) => {
       messages: messages,
       max_tokens: 1000,
       temperature: 0.7,
-      stream: true,
+      stream: true, // Enable streaming
     });
 
-    res.json({ 
-      reply: completion.choices[0].message.content 
+    // Set headers for streaming response
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.flushHeaders();
+
+    // Process the stream and send each chunk of data to the client
+    completion.on('data', (data) => {
+      const message = data.choices[0].message.content;
+      res.write(message); // Send each part of the response as it's generated
     });
+
+    // End the response when the stream ends
+    completion.on('end', () => {
+      res.end();
+    });
+
+    // Handle any errors during the stream
+    completion.on('error', (error) => {
+      console.error("Error during streaming:", error);
+      res.status(500).json({
+        error: error.message || "An error occurred while streaming data",
+      });
+    });
+
   } catch (error) {
     console.error("API Error:", error);
-    res.status(500).json({ 
-      error: error.message || "Failed to process request" 
+    res.status(500).json({
+      error: error.message || "Failed to process request"
     });
   }
 });
