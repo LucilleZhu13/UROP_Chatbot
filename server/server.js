@@ -39,8 +39,7 @@ app.use(bodyParser.json());
 let openai;
 try {
   openai = new OpenAI({
-    baseURL: "https://api.deepseek.com",
-    apiKey: process.env.OPENAI_API_KEY, // Use environment variable
+    apiKey: process.env.OPENAI_API_KEY,
   });
 
   if (!process.env.OPENAI_API_KEY) {
@@ -87,7 +86,7 @@ app.post("/chat", async (req, res) => {
     ];
 
     const completion = await openai.chat.completions.create({
-      model: "deepseek-chat",
+      model: "gpt-4o",
       messages: messages,
       max_tokens: 1000,
       temperature: 0.7,
